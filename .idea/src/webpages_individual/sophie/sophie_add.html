@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Add Steve — The Garden</title>
+    <style>
+        :root{
+            --bg0:#0a1f19; --bg1:#123a2e; --bg2:#1b2a4e;
+            --ink:#f3f8f1; --ink-soft:#b7cbbd; --line:rgba(255,255,255,.12);
+            --card:rgba(255,255,255,.055); --gold:#e9c46a;
+            --plant:#f4c430;                 /* Steve's flower color — Sunflower */
+            --plant-soft:rgba(244,196,48,.28);
+        }
+        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+        html,body{margin:0;padding:0}
+        body{
+            font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+            color:var(--ink);
+            background:
+                    radial-gradient(120% 90% at 18% -10%, rgba(233,196,106,.16), transparent 55%),
+                    radial-gradient(100% 80% at 100% 112%, var(--plant-soft), transparent 55%),
+                    linear-gradient(160deg,var(--bg0),var(--bg1) 55%,var(--bg2));
+            background-attachment:fixed;
+            min-height:100vh;display:flex;align-items:center;justify-content:center;
+            padding:24px 16px;
+        }
+        .card{
+            max-width:380px;width:100%;text-align:center;
+            background:var(--card);border:1px solid var(--line);border-radius:26px;padding:34px 26px;
+            backdrop-filter:blur(9px);box-shadow:0 20px 50px rgba(0,0,0,.4);
+        }
+        .eyebrow{letter-spacing:.18em;text-transform:uppercase;font-size:11px;color:var(--ink-soft);margin-bottom:18px}
+        .eyebrow b{color:var(--gold)}
+
+        .avatar{
+            width:120px;height:120px;border-radius:50%;margin:0 auto 18px;overflow:hidden;
+            display:grid;place-items:center;font-size:56px;
+            border:3px solid var(--plant);background:var(--plant-soft);
+            box-shadow:0 0 30px var(--plant-soft);
+        }
+        .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+
+        h1{font-family:Georgia,"Times New Roman",serif;font-size:26px;margin:0 0 6px}
+        .flower-line{font-size:15px;color:var(--ink-soft);margin-bottom:26px}
+        .flower-line b{color:var(--plant)}
+
+        .btn{
+            display:block;width:100%;padding:16px;border:0;border-radius:14px;cursor:pointer;
+            background:linear-gradient(135deg,var(--gold),#f0b429);color:#26210c;font-size:16px;font-weight:700;
+            letter-spacing:.02em;box-shadow:0 10px 26px rgba(233,196,106,.28);transition:transform .1s, opacity .2s;
+        }
+        .btn:active{transform:translateY(1px)}
+        .btn[disabled]{opacity:.55;cursor:default}
+
+        .back{display:none;margin-top:16px;font-size:13px;color:var(--ink-soft);text-decoration:underline}
+        .back.show{display:inline-block}
+
+        #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(130px);
+            background:rgba(12,32,25,.97);border:1px solid var(--gold);padding:13px 18px;border-radius:14px;
+            font-size:14px;max-width:90%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.5);
+            transition:transform .42s cubic-bezier(.2,.9,.3,1.2);z-index:50}
+        #toast.show{transform:translateX(-50%) translateY(0)}
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="eyebrow">The&nbsp;<b>Garden</b> · New connection</div>
+
+    <div class="avatar" id="avatar">🌻</div>
+    <!-- ⬆ shows 🌻 until steve.jpg exists in this folder, then the photo takes over automatically -->
+
+    <h1>Steve</h1>
+    <div class="flower-line">is a <b>Sunflower</b> 🌻</div>
+
+    <button class="btn" id="connectBtn">Connect with Steve</button>
+    <a class="back" id="backLink" href="../daniel/daniel_page.html">← Back to your garden</a>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    // ---- Steve's fixed info (no backend yet, so it's hardcoded here) ----
+    const PERSON = {
+        id: 'steve',
+        name: 'Steve',
+        plant: 'sunflower',
+        plantLabel: 'Sunflower',
+        emoji: '🌻',
+        color: '#f4c430',
+        photo: 'steve.jpg'   // looks for this file in the same folder
+    };
+
+    const KEY_C = 'garden_contacts';
+    const $ = id => document.getElementById(id);
+
+    // try loading his real photo; fall back to the emoji if it's missing
+    const img = new Image();
+    img.onload = () => { $('avatar').innerHTML = '<img src="'+PERSON.photo+'" alt="Steve">'; };
+    img.src = PERSON.photo;
+
+    function loadContacts(){ try{ return JSON.parse(localStorage.getItem(KEY_C)) || []; } catch(e){ return []; } }
+    function saveContacts(list){ try{ localStorage.setItem(KEY_C, JSON.stringify(list)); } catch(e){} }
+
+    function toast(msg){
+        const t = $('toast'); t.textContent = msg; t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    $('connectBtn').addEventListener('click', () => {
+        const list = loadContacts();
+        if(list.some(c => c.id === PERSON.id)){
+            toast('You already connected with Steve 🌿');
+        } else {
+            list.push({
+                id: PERSON.id,
+                name: PERSON.name,
+                plant: PERSON.plant,
+                metAt: new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})
+            });
+            saveContacts(list);
+            toast('🌻 Added Steve to your garden!');
+        }
+        $('connectBtn').textContent = 'Connected ✓';
+        $('connectBtn').disabled = true;
+        $('backLink').classList.add('show');
+    });
+</script>
+
+</body>
+</html>
