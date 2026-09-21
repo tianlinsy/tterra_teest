@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// The Garden — Firestore rules
+//
+// Demo-day trust model: no sign-in. Anyone with the page can read guests
+// (needed: tapping a bracelet has to show who it belongs to) and record
+// connections. Writes are shape-checked so the data can't be corrupted.
+// Bracelets identify people; the ESP32 reads guests/{id} with no auth.
+
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function validId(id)     { return id.matches('^[A-Z0-9-]{1,16}$'); }
+    function guestExists(id) { return exists(/databases/$(db)/documents/guests/$(id)); }
+    function isString(v, max){ return v is string && v.size() <= max; }
+
+    match /guests/{gid} {
+      allow read: if true;
+
+      // Plant yourself: only if this bracelet code is free (create ≠ update).
+      allow create: if validId(gid)
+        && isString(request.resource.data.name, 40)
+        && request.resource.data.name.size() >= 1
+        && isString(request.resource.data.plant, 20)
+        && request.resource.data.count == 0
+        && (!('answer' in request.resource.data) || isString(request.resource.data.answer, 40))
+        && (!('photo'  in request.resource.data) || isString(request.resource.data.photo, 90000));
+
+      // The only thing that changes afterwards is the connection count.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count'])
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0;
+
+      // "Reset my garden" frees the bracelet code.
+      allow delete: if true;
+
+      match /contacts/{cid} {
+        allow read: if true;
+        allow create: if validId(cid) && cid != gid && guestExists(cid)
+          && isString(request.resource.data.name, 40)
+          && isString(request.resource.data.plant, 20);
+        allow update: if false;
+        allow delete: if true;
+      }
+    }
+
+    match /{other=**} { allow read, write: if false; }
+  }
+}
