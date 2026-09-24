@@ -35,9 +35,9 @@
 //                such as USC Secure Wireless; leave off for normal networks
 struct WifiNet { const char* ssid; const char* prefix; const char* pass; const char* user; };
 const WifiNet NETWORKS[] = {
-  { "USC Secure Wireless",              "USC Secure Wireless", "johnspassword",  "John@2gmail.com" },  // enterprise login
-  { "USC Guest Wireless",               "USC Guest Wireless", ""                 },  // open campus Wi-Fi
-  { "Alex\xe2\x80\x99s iPhone (3)",  "Alex",               "2444666668888888" },  // backup: hotspot
+  { "USC Secure Wireless",             "USC Secure Wireless", "johnspassword",    "John@2gmail.com" },  // login network
+  { "USC Guest Wireless",              "USC Guest Wireless",  "",                 nullptr           },  // open campus Wi-Fi
+  { "Alex\xe2\x80\x99s iPhone (3)", "Alex",                "2444666668888888", nullptr           },  // backup: hotspot
 };
 
 // --- Firebase → Project settings → General
@@ -241,14 +241,25 @@ int fetchGuest(int& count, char* plant, size_t plantLen) {
 }
 
 // ------------------------------------------------------------ main
+// Power-on self-test: sweep green across all LEDs, then off. If you never see
+// this, the problem is the strip's power/data wiring, not Wi-Fi or the website.
+void selfTest() {
+  for (int i = 0; i < NUM_LEDS; i++) { strip.setPixelColor(i, strip.Color(0, 120, 0)); strip.show(); delay(60); }
+  delay(250);
+  strip.clear(); strip.show();
+}
+
 void setup() {
   Serial.begin(115200);
-  delay(200);
+  delay(1500);                              // give Serial Monitor time to attach
+  Serial.println("\n=== The Garden bracelet " BRACELET_ID " booting ===");
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.clear(); strip.show();
+  Serial.println("LED self-test: all LEDs should flash green once");
+  selfTest();
   petalColor = colorForPlant("");
-  Serial.println("\nThe Garden bracelet " BRACELET_ID);
+  strip.setPixelColor(0, strip.Color(40, 80, 255)); strip.show();   // solid blue while scanning
   connectWiFi();
 }
 
