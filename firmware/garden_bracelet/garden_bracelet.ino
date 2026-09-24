@@ -31,8 +31,11 @@
 //       prefix : also accept any network whose name starts with this
 //                (handles iPhone hotspot names with a curly apostrophe)
 //       pass   : "" for an open network
-struct WifiNet { const char* ssid; const char* prefix; const char* pass; };
+//       user   : login name for enterprise (username + password) networks
+//                such as USC Secure Wireless; leave off for normal networks
+struct WifiNet { const char* ssid; const char* prefix; const char* pass; const char* user; };
 const WifiNet NETWORKS[] = {
+  { "USC Secure Wireless",              "USC Secure Wireless", "johnspassword",  "John@2gmail.com" },  // enterprise login
   { "USC Guest Wireless",               "USC Guest Wireless", ""                 },  // open campus Wi-Fi
   { "Alex\xe2\x80\x99s iPhone (3)",  "Alex",               "2444666668888888" },  // backup: hotspot
 };
@@ -158,9 +161,13 @@ bool tryNetwork(const WifiNet& net, int scanned) {
   }
   if (!ssid.length()) { Serial.printf("  \"%s\" not in range\n", net.ssid); return false; }
 
-  Serial.printf("Connecting to \"%s\"%s", ssid.c_str(), strlen(net.pass) ? "" : " (open)");
-  if (strlen(net.pass)) WiFi.begin(ssid.c_str(), net.pass);
-  else                  WiFi.begin(ssid.c_str());
+  bool enterprise = net.user && strlen(net.user);
+  Serial.printf("Connecting to \"%s\"%s", ssid.c_str(),
+                enterprise ? " (login)" : strlen(net.pass) ? "" : " (open)");
+  if (enterprise)
+    WiFi.begin(ssid.c_str(), WPA2_AUTH_PEAP, net.user, net.user, net.pass);  // username + password
+  else if (strlen(net.pass)) WiFi.begin(ssid.c_str(), net.pass);
+  else                       WiFi.begin(ssid.c_str());
   unsigned long t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
     breathe(strip.Color(40, 80, 255));      // blue = connecting
