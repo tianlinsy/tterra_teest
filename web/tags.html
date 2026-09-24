@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Garden — NFC tag sheet</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .tool{max-width:760px;margin:0 auto}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row label{margin:0 0 6px}
+  .row > div{flex:1;min-width:120px}
+  .row input{width:100%}
+  .btn{margin-top:14px}
+  .tags{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:18px}
+  .tag{background:#fff;color:#111;border-radius:14px;padding:12px;text-align:center;break-inside:avoid}
+  .tag svg{width:100%;max-width:150px;height:auto;display:block;margin:0 auto 8px}
+  .tag .code{font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:700;letter-spacing:.06em}
+  .tag .u{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:#555;word-break:break-all;margin-top:4px}
+  textarea.list{width:100%;min-height:120px;font:12px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.24);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:14px}
+  .note{font-size:13px;color:var(--ink-soft);line-height:1.5}
+  @media print{ body{background:#fff;color:#000;padding:0} .card,.brand,.noprint{display:none!important} .tags{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm} .tag{border:1px dashed #999} }
+</style>
+</head>
+<body>
+<div class="wrap tool">
+  <header class="brand">The&nbsp;<b>Garden</b><span>NFC tag sheet</span></header>
+
+  <section class="card noprint">
+    <h1 style="font-size:22px">Make a batch of tags</h1>
+    <p class="note">Each NFC tag carries one person's link. Whoever taps <em>their own</em> tag first claims that code and becomes that person; from then on anyone who taps it connects with them. Generate a batch, write each URL to a tag with the NFC Tools app, and label the tag with its code.</p>
+    <div class="row">
+      <div><label for="prefix">Code prefix</label><input id="prefix" value="T" maxlength="6" autocapitalize="characters"></div>
+      <div><label for="from">From #</label><input id="from" type="number" value="1" min="1" max="999"></div>
+      <div><label for="count">How many</label><input id="count" type="number" value="20" min="1" max="200"></div>
+      <div><label for="site">Site</label><input id="site" value=""></div>
+    </div>
+    <button class="btn" id="go">Generate</button>
+    <div class="link-btns" style="margin-top:10px">
+      <button class="mini" id="copyList">Copy URL list</button>
+      <button class="mini" id="print">Print sheet</button>
+    </div>
+    <textarea class="list" id="list" readonly placeholder="URLs appear here — one per line, ready to paste into NFC Tools"></textarea>
+  </section>
+
+  <div class="tags" id="tags"></div>
+</div>
+
+<script src="qrcode.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  $('site').value = location.origin + location.pathname.replace(/tags\.html$/, '');
+  const norm = s => String(s||'').toUpperCase().replace(/[^A-Z0-9-]/g,'');
+
+  function gen(){
+    const prefix = norm($('prefix').value) || 'T';
+    const from = Math.max(1, +$('from').value|0), n = Math.min(200, Math.max(1, +$('count').value|0));
+    const site = $('site').value.replace(/\/?$/, '/');
+    const pad = String(from + n - 1).length < 2 ? 2 : String(from + n - 1).length;
+    const urls = [];
+    $('tags').innerHTML = '';
+    for(let i = 0; i < n; i++){
+      const code = prefix + String(from + i).padStart(pad, '0');
+      const url  = site + '?met=' + code;
+      urls.push(url);
+      const q = qrcode(0, 'M'); q.addData(url); q.make();
+      const d = document.createElement('div'); d.className = 'tag';
+      d.innerHTML = q.createSvgTag({cellSize:4, margin:0, scalable:true}) + '<div class="code">' + code + '</div><div class="u">' + url + '</div>';
+      $('tags').appendChild(d);
+    }
+    $('list').value = urls.join('\n');
+  }
+  $('go').addEventListener('click', gen);
+  $('copyList').addEventListener('click', async () => { try{ await navigator.clipboard.writeText($('list').value); $('copyList').textContent = 'Copied ✓'; setTimeout(()=>$('copyList').textContent='Copy URL list',1500);}catch(e){ $('list').select(); } });
+  $('print').addEventListener('click', () => window.print());
+  gen();
+</script>
+</body>
+</html>
