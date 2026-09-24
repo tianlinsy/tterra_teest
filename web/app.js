@@ -289,8 +289,58 @@ $('shareBtn').addEventListener('click', async () => {
     }
 });
 
+// ---- demo: double-tap a flower to remove that connection (both ways) ----
+async function removeContact(otherId){
+    const me = loadMe(); if(!me) return;
+    const row = document.querySelector('.c-av[data-id="'+CSS.escape(otherId)+'"]')?.closest('.contact');
+    if(row) row.classList.add('removing');
+    try {
+        const name = await runTransaction(db, async tx => {
+            const mine   = await tx.get(contactRef(me.id, otherId));
+            const theirs = await tx.get(contactRef(otherId, me.id));
+            const other  = await tx.get(guestRef(otherId));
+            if(!mine.exists()) return null;
+            tx.delete(contactRef(me.id, otherId));
+            tx.update(guestRef(me.id), { count: increment(-1) });
+            if(theirs.exists() && other.exists()){
+                tx.delete(contactRef(otherId, me.id));
+                tx.update(guestRef(otherId), { count: increment(-1) });
+            }
+            return mine.data().name;
+        });
+        if(name) toast('Removed ' + name + ' 🍂');
+    } catch(err){
+        console.error(err);
+        if(row) row.classList.remove('removing');
+        toast('Could not remove — try again.');
+    }
+}
+// Works for desktop double-click and mobile double-tap (iOS doesn't reliably fire dblclick).
+let lastTap = { id: '', t: 0 };
+$('contacts').addEventListener('click', e => {
+    const av = e.target.closest('.c-av'); if(!av) return;
+    const id = av.dataset.id, now = Date.now();
+    if(lastTap.id === id && now - lastTap.t < 400){ lastTap = { id: '', t: 0 }; removeContact(id); }
+    else lastTap = { id, t: now };
+});
+
+// ---- show / hide the QR code (remembered on this phone) ----
+const KEY_QR = 'garden_qr_hidden';
+function applyQrHidden(hidden){
+    document.querySelector('.link-card').classList.toggle('qr-hidden', hidden);
+    $('qrToggle').textContent = hidden ? 'Show QR' : 'Hide QR';
+    $('qrToggle').setAttribute('aria-expanded', String(!hidden));
+}
+$('qrToggle').addEventListener('click', () => {
+    const hidden = !document.querySelector('.link-card').classList.contains('qr-hidden');
+    applyQrHidden(hidden);
+    try { localStorage.setItem(KEY_QR, hidden ? '1' : ''); } catch(e){}
+});
+try { applyQrHidden(localStorage.getItem(KEY_QR) === '1'); } catch(e){}
+
 function renderContacts(){
     $('contactCount').textContent = contacts.length;
+    $('removeHint').hidden = contacts.length === 0;
     const box = $('contacts');
     if(!contacts.length){
         box.innerHTML = '<div class="empty">No connections yet —<br>go tap someone\'s bracelet.</div>';
@@ -300,7 +350,7 @@ function renderContacts(){
         const p = plantById(c.plant);
         const t = c.metAt && c.metAt.toDate ? c.metAt.toDate().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : 'just now';
         return '<div class="contact' + (c.pending ? ' pending' : '') + '">'
-            + '<div class="c-av" style="background:'+hexToRGBA(p.color,.22)+'">'+p.emoji+'</div>'
+            + '<div class="c-av" data-id="'+esc(c.id)+'" title="Double-tap to remove" style="background:'+hexToRGBA(p.color,.22)+'">'+p.emoji+'</div>'
             + '<div><div class="c-name">'+esc(c.name)+'</div>'
             + '<div class="c-meta">'+p.name+' · '+esc(c.id)+' · met at '+t+'</div></div></div>';
     }).join('');

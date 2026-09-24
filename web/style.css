@@ -209,3 +209,12 @@ input:focus,select:focus{border-color:var(--gold)}
 .qr-big svg{width:100%;height:100%;display:block}
 .qr-big-name{font-family:Georgia,serif;font-size:24px;margin-top:6px}
 .qr-big-sub{color:var(--ink-soft);font-size:13px}
+
+/* ---------------- demo controls ---------------- */
+.pill-btn{cursor:pointer;font:inherit;font-size:12px;color:var(--ink-soft)}
+.pill-btn:hover{border-color:var(--gold);color:var(--ink)}
+.link-card.qr-hidden .qr{display:none}
+.tiny-hint{font-size:11.5px;color:var(--ink-soft);margin:-6px 0 6px;opacity:.8}
+.c-av{cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:transform .15s}
+.c-av:active{transform:scale(.92)}
+.contact.removing{opacity:.35;transition:opacity .25s}

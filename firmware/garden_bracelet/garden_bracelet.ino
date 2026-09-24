@@ -24,12 +24,18 @@
 //     "plant themselves". Uppercase letters, digits, dashes; max 16 chars.
 #define BRACELET_ID          "A1"
 
-// --- Wi-Fi: Alex's iPhone Personal Hotspot ("Maximize Compatibility" must be ON).
-//     iPhone hotspot names contain a curly apostrophe, so the firmware also
-//     accepts any network whose name STARTS WITH WIFI_SSID_PREFIX.
-#define WIFI_SSID            "Alex\xe2\x80\x99s iPhone (3)"   // exact name (curly ’)
-#define WIFI_SSID_PREFIX     "Alex"                         // fallback: first network starting with this
-#define WIFI_PASSWORD        "2444666668888888"
+// --- Wi-Fi networks, tried in order. The first one that is in range AND
+//     actually reaches the internet wins; if it's behind a sign-in page or
+//     has no internet, the bracelet moves on to the next.
+//       ssid   : exact network name
+//       prefix : also accept any network whose name starts with this
+//                (handles iPhone hotspot names with a curly apostrophe)
+//       pass   : "" for an open network
+struct WifiNet { const char* ssid; const char* prefix; const char* pass; };
+const WifiNet NETWORKS[] = {
+  { "USC Guest Wireless",               "USC Guest Wireless", ""                 },  // open campus Wi-Fi
+  { "Alex\xe2\x80\x99s iPhone (3)",  "Alex",               "2444666668888888" },  // backup: hotspot
+};
 
 // --- Firebase → Project settings → General
 #define FIREBASE_PROJECT_ID  "terra-garden-f8f03"
@@ -125,39 +131,69 @@ void blinkError() {                         // red double-blink on LED 0
 }
 
 // ------------------------------------------------------------ Wi-Fi
-// Find the hotspot: exact name first, else the strongest network whose
-// name starts with WIFI_SSID_PREFIX (handles iPhone's curly apostrophe).
-String pickSSID() {
-  int n = WiFi.scanNetworks();
-  String best = ""; int bestRssi = -999;
-  for (int i = 0; i < n; i++) {
-    String s = WiFi.SSID(i);
-    if (s == WIFI_SSID) { WiFi.scanDelete(); return s; }
-    if (s.startsWith(WIFI_SSID_PREFIX) && WiFi.RSSI(i) > bestRssi) { best = s; bestRssi = WiFi.RSSI(i); }
-  }
-  WiFi.scanDelete();
-  return best.length() ? best : String(WIFI_SSID);
+const int NUM_NETWORKS = sizeof(NETWORKS) / sizeof(NETWORKS[0]);
+String connectedSSID = "";
+
+// Does this connection reach the open internet, or is it stuck behind a
+// sign-in / "accept terms" page? Google's check URL answers 204 with an
+// empty body on a clean connection; a captive portal redirects or rewrites it.
+bool hasInternet() {
+  WiFiClient c;
+  HTTPClient http;
+  http.setTimeout(5000);
+  if (!http.begin(c, "http://connectivitycheck.gstatic.com/generate_204")) return false;
+  int code = http.GET();
+  http.end();
+  Serial.printf("  internet check: HTTP %d\n", code);
+  return code == 204;
 }
 
-bool connectWiFi() {
-  if (WiFi.status() == WL_CONNECTED) return true;
-  WiFi.mode(WIFI_STA);
-  String ssid = pickSSID();
-  Serial.printf("Connecting to \"%s\"", ssid.c_str());
-  WiFi.begin(ssid.c_str(), WIFI_PASSWORD);
+// Try to join one network (exact name, else strongest name with the prefix).
+bool tryNetwork(const WifiNet& net, int scanned) {
+  String ssid = ""; int bestRssi = -999;
+  for (int i = 0; i < scanned; i++) {
+    String s = WiFi.SSID(i);
+    if (s == net.ssid) { ssid = s; break; }
+    if (s.startsWith(net.prefix) && WiFi.RSSI(i) > bestRssi) { ssid = s; bestRssi = WiFi.RSSI(i); }
+  }
+  if (!ssid.length()) { Serial.printf("  \"%s\" not in range\n", net.ssid); return false; }
+
+  Serial.printf("Connecting to \"%s\"%s", ssid.c_str(), strlen(net.pass) ? "" : " (open)");
+  if (strlen(net.pass)) WiFi.begin(ssid.c_str(), net.pass);
+  else                  WiFi.begin(ssid.c_str());
   unsigned long t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
     breathe(strip.Color(40, 80, 255));      // blue = connecting
     if ((millis() - t0) % 500 < 25) Serial.print(".");
   }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\nConnected, IP %s\n", WiFi.localIP().toString().c_str());
+  if (WiFi.status() != WL_CONNECTED) { Serial.println(" timeout"); WiFi.disconnect(); return false; }
+  Serial.printf(" connected, IP %s\n", WiFi.localIP().toString().c_str());
+
+  if (!hasInternet()) {
+    Serial.println("  no internet here (sign-in page?) - trying next network");
+    WiFi.disconnect(); delay(300);
+    return false;
+  }
+  connectedSSID = ssid;
+  return true;
+}
+
+bool connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return true;
+  WiFi.mode(WIFI_STA);
+  int n = WiFi.scanNetworks();
+  Serial.printf("Scan: %d networks\n", n);
+  bool ok = false;
+  for (int k = 0; k < NUM_NETWORKS && !ok; k++) ok = tryNetwork(NETWORKS[k], n);
+  WiFi.scanDelete();
+  if (ok) {
     WiFi.setSleep(true);                    // modem sleep between packets
     strip.setPixelColor(0, 0); strip.show();
-    return true;
+    Serial.printf("Online via \"%s\"\n", connectedSSID.c_str());
+  } else {
+    Serial.println("No usable network - retrying");
   }
-  Serial.println("\nWi-Fi timeout");
-  return false;
+  return ok;
 }
 
 // ------------------------------------------------------------ Firestore

@@ -156,9 +156,22 @@ A bracelet is a tag plus LEDs: its tag holds the bracelet's code (`A1`), and the
 
 ### Wi-Fi at the event
 
-A phone hotspot works well. **iPhone:** Settings → Personal Hotspot → **Allow Others to Join** and **Maximize Compatibility** ON (the ESP32 is 2.4 GHz only), and keep that screen open while the bracelet boots — iPhones stop advertising after ~90 s with no clients. iPhone hotspot names contain a curly apostrophe, which is why the firmware has `WIFI_SSID_PREFIX`: it scans and joins the strongest network whose name starts with that prefix if the exact name isn't found. Networks with a login page (hotel/café) won't work.
+The firmware has a short **network list** in its SETTINGS block, tried in order:
 
-The bracelet only sends a few hundred bytes every 3 s, so a weak data signal is fine. No data at all → red double-blink until it comes back.
+```cpp
+const WifiNet NETWORKS[] = {
+  { "USC Guest Wireless",           "USC Guest Wireless", ""                 },  // open campus Wi-Fi
+  { "Alex\xe2\x80\x99s iPhone (3)", "Alex",              "2444666668888888" },  // backup: hotspot
+};
+```
+
+On boot (and whenever Wi-Fi drops) the bracelet scans, joins the first listed network that's in range, and then checks it can actually reach the internet. If it can't — no signal upstream, or a sign-in / accept-terms page — it disconnects and tries the next one. So on campus it uses **USC Guest Wireless** (open, no password; USC ITS lists it as needing no login), and anywhere else it falls back to the hotspot. Add, remove or reorder lines to change that; use `""` as the password for an open network.
+
+The ESP32 is 2.4 GHz only and can't click through a login page, so any network that needs one will be skipped. **iPhone hotspot:** Settings → Personal Hotspot → **Allow Others to Join** and **Maximize Compatibility** ON, and keep that screen open while the bracelet boots (iPhones stop advertising after ~90 s with no clients). The `prefix` column handles the curly apostrophe in iPhone hotspot names.
+
+Serial Monitor shows the whole decision: `Scan: 14 networks` → `Connecting to "USC Guest Wireless" (open)… connected` → `internet check: HTTP 204` → `Online via "USC Guest Wireless"`. A code other than 204 means that network was skipped.
+
+The bracelet only sends a few hundred bytes every 3 s, so a weak signal is fine.
 
 ### LED demo without Wi-Fi
 
@@ -184,8 +197,10 @@ The bracelet only sends a few hundred bytes every 3 s, so a weak data signal is 
 1. Everyone opens the site (tap a bracelet, scan someone's QR, or go to the URL) and plants themselves — bracelet wearers type their code, everyone else leaves it blank.
 2. Meet people: tap a bracelet or scan a QR. Both flowers grow live; bracelets bloom one more LED within ~3 s.
 3. Nine connections: Full Bloom on screen, white sparkle on the wrist.
-4. **Demo mode** at the bottom lists everyone in the garden, for connecting without reaching a phone.
-5. **Reset my garden** removes that guest everywhere and frees their code.
+4. **Remove a connection:** double-tap (or double-click) a person's flower icon under **People you've met**. The connection is removed for both people, both counts drop by one, and any bracelet loses an LED within ~3 s. They reappear under Demo mode so you can re-add them.
+5. **Hide / Show QR** in the corner of the **Your link** card, when you don't want the code on screen. The choice is remembered on that phone.
+6. **Demo mode** at the bottom lists everyone in the garden, for connecting without reaching a phone.
+7. **Reset my garden** removes that guest everywhere and frees their code.
 
 ---
 
@@ -205,7 +220,8 @@ The bracelet only sends a few hundred bytes every 3 s, so a weak data signal is 
 | Red double-blink; Serial says `HTTP 403` | Rules not published / `allow read` broken. |
 | Red double-blink; `HTTP 404` on a code you *know* is planted | `FIREBASE_PROJECT_ID` typo. |
 | Red double-blink; `-1` | Wi-Fi has no internet (hotspot data off, captive portal). |
-| Blue breathing never stops | Wrong SSID/password, hotspot asleep, or 5 GHz-only network. |
+| Blue breathing never stops | No listed network in range, wrong password, hotspot asleep, or 5 GHz-only network. Serial Monitor says which. |
+| Serial: `internet check: HTTP 302`/`200` on USC Guest Wireless | That access point is showing a sign-in page. The bracelet moves on to the hotspot automatically. |
 | `fatal error: Adafruit_NeoPixel.h: No such file` | Install the library (Tools → Manage Libraries). |
 | Colours wrong / flicker | Add the capacitor; try `NEO_RGB` instead of `NEO_GRB` in the `.ino`. |
 | Someone claimed the wrong code | They tap **Reset my garden** and plant again. |
